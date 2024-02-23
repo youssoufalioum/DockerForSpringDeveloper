@@ -1,0 +1,109 @@
+===========================Conteneuriser l'application Java Springboot==============================
+Pour Dockeriser l'appli java spring boot afin de se connecter à la Base de donnée Mysql il existe 2 Approches:
+a) Créer un Docker NetWork.
+b) Utiliser Docker Compose.
+
+	a) Approche 1 (Docker Network):
+		1) Pull l'image Mysql depuis Docker hub (Voir partie Mysql ci-dessous).
+		2) Créer Docker Network pour faire communiquer l'appli Java Springboot et le serveur Mysql et d'autres conteneurs: sudo docker network create network_name
+		3) Exécuter le conteneur Mysql(voir partie Mysql ci-dessous):-NB: Enlever MYSQL_USER dans la commande d'execution de Mysql.
+		4) Modifier le fichier application.properties du projet Springboot: url=nom_du_conteneur_Mysql; user="user"; password="password"
+		5) générer le .jar: mvn clean package -DskipTests
+		6) Créer l'image de l'appli Springboot(créer au prealable le fichier Dockerfile dans le projet Springboot): sudo docker build -t app_image_name .
+		7) Executer le conteneur de l'appli: docker run --network network_name --name conteneur_name -p 8080:8080 -d app_image_name
+			* "-p": permet de mapper le port de l'application au port du conteneur
+
+	b) Approche 2 (Docker compose):
+		1) Créer un fichier "docker-compose.yml" (Pour le contenu du fichier voir partie Docker compose ci-dessous)
+		2) Exécuter la commande: sudo docker compose up (ajouter -d pour le démarrage en background du terminal:facultatif)
+==============================================End====================================================
+
+===================Mysql======================
+*Pull Mysql avec Docker: sudo docker pull mysql
+*Executer Mysql avec Docker: sudo docker run --name some-mysql --network network_name -e MYSQL_ROOT_PASSWORD=my-secret-pw -e MYSQL_DATABASE=dbName -e MYSQL_USER=root -e MYSQL_PASSWORD=my_secret-pw -d image_name:tag
+	- some-mysql: c'est le nom qu'on veut donner au container
+	- my-secret-pw: c'est le mot de passe qui doit être modifier pour l'utilisateur root Mysql
+	- tag: c'est le tag qui specifie la version de Mysql qu'on veut.
+	- MYSQL_DATABASE=ma_bd : On peut ajouter ceci pour créer en même temps une base de donnée.
+*Demarrer le client Mysql dans le conteneur en mode interactif en utilisant les options "-it (input terminal)": sudo docker exec -it container_name mysql --password
+*#Mapper les volumes au démarrage du conteneur Mysql afin de rendre les données persistantes en dehors du conteneur: sudo docker run -v /opt/dataDir:/var/lib/mysql mysql
+===================End========================
+
+=====================PHPMYADMIN==================
+*Pull Image PHPMYADMIN: docker pull phpmyadmin
+*Executer PHPMYADMIN (Utilisation avec serveur lié***): sudo docker run --network network_name --name phpmyadmin -d --link mysql_db_server:db -p 8080:80 phpmyadmin
+	- network_name: c'est le nom du reseau (network) qui a été créer.
+	- mysql_db_server: c'est le nom du conteneur Mysql.
+	- puis lorsqu'on se connecte à http://localhost:8080 sur le navigateur le User=root et password= password définit lors de l'execution de Mysql(MYSQL_ROOT_PASSWORD)
+*Executer PHPMYADMIN (Utilisation avec serveur externe): sudo docker run --name phpmyadmin -d -e PMA_HOST=dbhost -p 8080:80 phpmyadmin
+	- dbhost: c'est le nom de l'image Mysql.
+======================End=========================
+
+===============Basic Dockerfile=====================
+Creation d'un fichier "Dockerfile.txt" (Methode classique) dans le projet Springboot:
+NB: Depuis la version 2.3.0 de Springboot on peut générer l'image docker de notre appli (buildpack) sans créer un "Dockerfile" par la commande: mvn spring-boot:build-image
+et Executer: sudo docker run --rm -p 8080:8080 image_name:tag
+____________________________________________
+FROM openjdk:17-jdk-alpine
+VOLUME /tmp
+COPY target/*.jar app_name.jar
+ENTRYPOINT ["java","-jar","/app_name.jar"]
+____________________________________________
+
+====================End=============================
+
+===============================Docker compose==================================
+version: "2.18.1"
+networks:
+  default:
+    name: staffme-mysql
+services:
+  mysql-server:
+    container_name: mysql-server
+    platform: linux/x86_64
+    image: mysql
+    restart: always
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_DATABASE: staffme
+      MYSQL_ROOT_PASSWORD: 1234
+  staffme:
+    image: staffme-api
+    container_name: staffme-api
+    build: .
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - mysql-server
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - 8081:80
+    links:
+      - mysql-server:db
+====================================End========================================
+
+======================Commandes Docker======================
+*générer une image docker: sudo docker build -t app_image_name .
+*Visualiser le fichier log d'un Conteneur: sudo docker logs container_id
+*Voir la liste des réseaux(Network) créer: sudo docker network ls
+*Supprimer un network(reseau): sudo docker network rm id_or_name_network
+*Stopper un conteneur: sudo docker stop id_or_conteneur_name
+*Stopper tous les conteneurs: sudo docker stop $(sudo docker ps -a -q)
+*Démarrer un conteneur: sudo docker start id_or_conteneur_name
+*Voir la liste des conteneurs en cours d'execution  (UP): sudo docker ps
+*Voir la liste de tous les conteneurs(ouvert ou fermer): sudo docker ps -a
+*supprimer un conteneur(NB:Stopper au prealable): sudo docker rm id_or_conteneur_name
+*Supprimer tous les conteneurs: sudo docker rm $(sudo docker ps -a -q)
+*Voir la liste des images: sudo docker images
+*Supprimer une image: sudo docker rmi id_or_image_name
+*Supprimer tous les images: sudo docker rmi $(sudo docker images)
+*Obtenir des informations sur les interfaces docker: docker inspect container_id | grep NetworkMode
+*Executer docker compose: sudo docker compose up
+*Executer docker compose en background du terminal: sudo docker compose up -d (ou --detach)
+========================End================================
+

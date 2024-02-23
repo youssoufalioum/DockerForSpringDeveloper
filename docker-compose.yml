@@ -1,0 +1,32 @@
+version: "2.18.1"
+networks:
+  default:
+    name: staffme-mysql
+services:
+  mysql-server:
+    container_name: mysql-server
+    platform: linux/x86_64
+    image: mysql
+    restart: always
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_DATABASE: staffme
+      MYSQL_ROOT_PASSWORD: 1234
+  staffme:
+    image: staffme-api
+    container_name: staffme-api
+    build: .
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - mysql-server
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - 8081:80
+    links:
+      - mysql-server:db
